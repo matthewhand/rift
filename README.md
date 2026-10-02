@@ -1,5 +1,66 @@
 <div align="center">
 
+# Changes in this fork
+
+Rift is upstream nixfred's project. This fork adds one feature and fixes one bug.
+Everything below the line is upstream's README, unchanged.
+
+## 1. "Tweak Config (with AI)" — an agent can set a launch recipe
+
+![The agent opened by Tweak Config (with AI), already holding the Rift's config](hero-ai-config.gif)
+
+*A real capture: the button's command firing, Omarchy opening grok, and grok
+reading the Rift's current recipe and answering correctly without being told what
+to say.*
+
+**The problem it solves.** Rift saves *what* to launch, but two things get lost:
+
+- `resume_command()` only produces a recipe for three hardcoded programs —
+  `claude`, `codex`, `grok`. Any other command is remembered as "a terminal in
+  `<cwd>`", so `herdr --remote matthewh@10.0.0.30` came back as a bare `foot`.
+- Detection records the window *class* but not the `--app-id`, so the stored
+  recipe launched a **generic** terminal and any window-class rule stopped
+  matching.
+
+Both are unfixable by observation: the arguments were never captured, so there is
+nothing to replay.
+
+**The fix.** A text field and a **Using AI** button in each Rift entry. Whatever
+you type is handed to an agent, which is opened on the Rift's own file already
+holding the current recipe and the rules that matter — that only `launch` is
+replayed, that the file is strict JSON, and to prefer `~/.local/bin/rift-set-launch`
+so the edit is backed up. The prompt deliberately refuses to open the Rift itself,
+because an agent "verifying" its work would launch windows on your desktop.
+
+It defers to `omarchy-agent` rather than naming an agent, because Omarchy already
+knows which one you use and how each wants a prompt (`grok --permission-mode
+bypassPermissions --` vs `opencode --auto --prompt` vs
+`gemini --prompt-interactive`). Hardcoding an agent is exactly what breaks the
+moment you switch.
+
+## 2. Fix: the panel key catcher swallowed every keystroke
+
+`PanelKeyCatcher` only forwarded keys to descendant inputs in `save` and `rename`
+mode. In `detail` mode — where a Rift entry and its actions live — it consumed
+keys first, so **Enter in any text field ran `activateSelection()`, which opens the
+Rift and launches its applications** instead of submitting. Clicking a field also
+left the catcher managing its selection, so the default button appeared to
+deselect itself.
+
+`blocked` now also follows the focused field's `activeFocus`, and Escape returns
+the keyboard to the panel.
+
+## Not changed on purpose
+
+Rift's strict JSON is upstream's decision and stays strict. So are its
+`claude`/`codex`/`grok` resume list and its terminal detection table — that is the
+project's design, and the reason the feature above exists rather than a patch to
+`resume_command`.
+
+---
+
+<div align="center">
+
 <img src="assets/rift-hero.png" alt="Application windows passing through a neon dimensional rift and reforming as a tiled workspace" width="100%">
 
 # 󰦛 Rift
