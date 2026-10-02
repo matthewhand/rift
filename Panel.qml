@@ -446,7 +446,10 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      blocked: root.mode === "save" || root.renaming
+      // Also block while the AI instruction field has focus. Without this the
+      // catcher eats every keystroke, so Enter ran activateSelection() -- which in
+      // detail mode opens the Rift, launching its apps -- instead of submitting.
+      blocked: root.mode === "save" || root.renaming || aiField.activeFocus
       onMoveRequested: function(dx, dy) { if (dy !== 0) root.moveSelection(dy) }
       onActivateRequested: root.activateSelection()
       onCloseRequested: { if (root.mode === "detail" || root.mode === "new") root.backToBrowse(); else root.close() }
@@ -980,6 +983,12 @@ Panel {
                 verticalPadding: Style.space(1)
                 onTextChanged: root.aiInstruction = text
                 onAccepted: root.tweakWithAi()
+                // Escape hands the keyboard back to the panel rather than leaving
+                // the field holding focus with the catcher blocked.
+                Keys.onEscapePressed: {
+                  root.aiInstruction = ""
+                  focus = false
+                }
               }
 
               Button {
