@@ -1311,10 +1311,6 @@ def startup_open() -> dict[str, Any]:
         return {"action": "startup", "opened": opened}
 
 
-AI_AGENT_ENV = "RIFT_AI_AGENT"
-AI_DEFAULT_AGENT = "opencode"
-
-
 def ai_prompt(slug: str, instruction: str) -> str:
     """Build the prompt that seeds an agent editing one Rift file.
 
@@ -1374,24 +1370,56 @@ Do not run `rift_helper.py open {slug}` yourself -- that launches windows on the
 user's desktop; they will test it."""
 
 
+def omarchy_agent_command() -> list[str] | None:
+    """Resolve omarchy-agent: PATH first, then $OMARCHY_PATH/bin.
+
+    Omarchy sets OMARCHY_PATH, so hardcoding /usr/share/omarchy would break on an
+    install that relocates it -- and PATH alone is not guaranteed inside the
+    widget's environment.
+    """
+    found = shutil.which("omarchy-agent")
+    if found:
+        return [found]
+    omarchy_path = os.environ.get("OMARCHY_PATH")
+    if omarchy_path:
+        candidate = Path(omarchy_path) / "bin" / "omarchy-agent"
+        if candidate.exists():
+            return [str(candidate)]
+    return None
+
+
 def open_ai_session(slug: str, instruction: str) -> dict[str, Any]:
-    """Open the user's agent on one Rift file, seeded with the current config."""
+    """Open the user's preferred agent on one Rift file, seeded with the config.
+
+    Delegates to omarchy-agent rather than picking a binary here. Omarchy already
+    knows which agent the user prefers (omarchy-default-agent) and, crucially, how
+    each one wants a prompt: grok needs `--permission-mode bypassPermissions --`,
+    opencode wants `--auto --prompt`, gemini wants `--prompt-interactive`. A
+    hardcoded binary plus a guessed flag is exactly the kind of thing that silently
+    fails, and it would also rot whenever the default agent changes.
+    """
+    launcher = omarchy_agent_command()
+    if launcher is None:
+        return {"action": "failed", "reason": "omarchy-agent not found"}
     prompt = ai_prompt(slug, instruction)
-    agent = os.environ.get(AI_AGENT_ENV) or AI_DEFAULT_AGENT
-    if not shutil.which(agent.split()[0]):
-        return {"action": "failed", "reason": f"{agent} not found on PATH"}
-    # Shell-quote the prompt so its quotes and newlines survive the trip.
-    quoted = shlex.quote(prompt)
-    inner = shlex.quote(f"{agent} {quoted}")
     try:
+        # omarchy-agent execs omarchy-launch-tui, so it opens its own window with
+        # the org.omarchy.agent app-id that the user's window rules already match.
         subprocess.Popen(
-            ["xdg-terminal-exec", "--", "bash", "-lc", f"cd {shlex.quote(str(RIFTS_ROOT))} && exec {inner}"],
+            [*launcher, "--prompt", prompt],
+            cwd=str(RIFTS_ROOT),
             start_new_session=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
     except OSError as error:
         return {"action": "failed", "reason": str(error)}
+    agent = "unknown"
+    try:
+        found = subprocess.run(["omarchy-default-agent"], capture_output=True, text=True, timeout=5)
+        agent = found.stdout.strip() or "unknown"
+    except (OSError, subprocess.TimeoutExpired):
+        pass
     return {"action": "opened", "agent": agent, "slug": slug}
 
 
