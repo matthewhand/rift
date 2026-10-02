@@ -1311,6 +1311,90 @@ def startup_open() -> dict[str, Any]:
         return {"action": "startup", "opened": opened}
 
 
+AI_AGENT_ENV = "RIFT_AI_AGENT"
+AI_DEFAULT_AGENT = "opencode"
+
+
+def ai_prompt(slug: str, instruction: str) -> str:
+    """Build the prompt that seeds an agent editing one Rift file.
+
+    Interactive on purpose. A headless agent would have to have its stdout parsed
+    back into JSON, which breaks the moment the model wraps its answer in a code
+    fence or explains itself. Opening the agent on the file means the change is
+    reviewed by a human before it is ever used.
+    """
+    path = rift_path(slug)
+    if not path.is_file():
+        raise FileNotFoundError(f"No such Rift: {slug}")
+    current = path.read_text()
+    listing = "\n".join(
+        f"  - class={app.get('class', '')!r} name={app.get('name', '')!r} "
+        f"kind={app.get('kind', '')!r} launch={app.get('launch')}"
+        for app in json.loads(current).get("apps", [])
+    )
+    goal = instruction.strip() or "(none given - ask the user what to change)"
+    return f"""You are adjusting one Rift config file in Rift, an Omarchy bar plugin.
+
+File: {path}
+
+Current contents:
+```json
+{current.rstrip()}
+```
+
+Apps in this Rift:
+{listing or "  (none)"}
+
+What the user asked for:
+{goal}
+
+How Rift actually works, so you do not "fix" the wrong thing:
+- On open, Rift executes each app's `launch` array. Nothing else is replayed.
+  The `command` field is recorded for display only and is NEVER executed.
+- Detection cannot learn an arbitrary command. `resume_command` only produces a
+  recipe for three hardcoded programs: claude, grok and codex. Anything else is
+  remembered as "a terminal in <cwd>" and its arguments are lost. So the way to
+  give an app arguments is to set `launch` yourself.
+- When Rift saved the window it only recorded the class, not the `--app-id`, so
+  the stored recipe often launches a *generic* terminal. Put the app-id back in
+  `launch` unless the user says otherwise, or their window-class rules stop
+  matching.
+- This file is strict JSON. No comments, no trailing commas. Do not reformat it.
+
+How to make the change, in order of preference:
+1. Use the helper, which backs up first and rewrites only the one key:
+   ~/.local/bin/rift-set-launch {slug} <class> <argv...>
+2. Otherwise edit `launch` (and `cwd` if asked) in place with a JSON-aware tool.
+   Leave every other key, and the key order, exactly as they are.
+
+When you are done, verify and report:
+  python3 {Path(__file__).resolve()} state
+
+Do not run `rift_helper.py open {slug}` yourself -- that launches windows on the
+user's desktop; they will test it."""
+
+
+def open_ai_session(slug: str, instruction: str) -> dict[str, Any]:
+    """Open the user's agent on one Rift file, seeded with the current config."""
+    prompt = ai_prompt(slug, instruction)
+    agent = os.environ.get(AI_AGENT_ENV) or AI_DEFAULT_AGENT
+    if not shutil.which(agent.split()[0]):
+        return {"action": "failed", "reason": f"{agent} not found on PATH"}
+    # Shell-quote the prompt so its quotes and newlines survive the trip.
+    quoted = shlex.quote(prompt)
+    inner = shlex.quote(f"{agent} {quoted}")
+    try:
+        subprocess.Popen(
+            ["xdg-terminal-exec", "--", "bash", "-lc", f"cd {shlex.quote(str(RIFTS_ROOT))} && exec {inner}"],
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError as error:
+        return {"action": "failed", "reason": str(error)}
+    return {"action": "opened", "agent": agent, "slug": slug}
+
+
 def emit(value: Any) -> None:
     print(json.dumps({"ok": True, "data": value}, separators=(",", ":")))
 
@@ -1338,6 +1422,11 @@ def parser() -> argparse.ArgumentParser:
     rename.add_argument("name")
     help_command = sub.add_parser("help")
     help_command.add_argument("enabled", choices=["on", "off"])
+    ai = sub.add_parser("ai")
+    ai.add_argument("slug")
+    ai.add_argument("--instruction", default="")
+    ai.add_argument("--print", dest="print_only", action="store_true",
+                    help="emit the prompt instead of opening an agent")
     sub.add_parser("new-workspace")
     sub.add_parser("startup-open")
     return result
@@ -1364,6 +1453,11 @@ def main() -> int:
         elif args.command == "delete":
             delete_rift(args.slug)
             emit({"deleted": args.slug})
+        elif args.command == "ai":
+            if args.print_only:
+                emit({"prompt": ai_prompt(args.slug, args.instruction)})
+            else:
+                emit(open_ai_session(args.slug, args.instruction))
         elif args.command == "new-workspace":
             emit(new_workspace())
         elif args.command == "startup-open":

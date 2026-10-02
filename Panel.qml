@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
@@ -28,6 +29,10 @@ Panel {
   property string statusText: ""
   property string errorText: ""
   property string pendingAction: ""
+  // "Tweak Config (with AI)": what the user asked to change. Handed to the agent
+  // when the button is pressed, then cleared, because the opened session is the
+  // thing being worked in from that point on.
+  property string aiInstruction: ""
   property string stateOutput: ""
   property string actionOutput: ""
   property bool refreshPending: false
@@ -271,6 +276,19 @@ Panel {
     if (!rift || actionProcess.running) return
     if (!confirmDelete) { confirmDelete = true; return }
     runAction("delete", ["delete", rift.slug])
+  }
+
+  // Open an agent on this Rift's file, already knowing the current recipe and the
+  // rules (strict JSON, only `launch` is replayed, prefer rift-set-launch). The
+  // field is cleared immediately: the session is now the thing being worked in.
+  function tweakWithAi() {
+    if (!detailRift || actionProcess.running) return
+    var instruction = String(aiInstruction || "").trim()
+    var args = instruction
+      ? ["ai", detailRift.slug, "--instruction", instruction]
+      : ["ai", detailRift.slug]
+    aiInstruction = ""
+    runAction("ai", args)
   }
 
   function toggleHelp() { runAction("help", ["help", helpOn ? "off" : "on"]) }
@@ -942,6 +960,35 @@ Panel {
               enabled: !actionProcess.running
               tooltipText: "L"
               onClicked: root.toggleStartup(root.detailRift)
+            }
+
+            // Tweak Config (with AI). Type what you want changed; the button opens
+            // the agent on this Rift's file with the current recipe already in the
+            // prompt. Enter in the field does the same thing.
+            RowLayout {
+              visible: root.detailRift ? true : false
+              width: parent.width
+              spacing: Style.spacing.sm
+
+              TextField {
+                id: aiField
+                Layout.fillWidth: true
+                text: root.aiInstruction
+                placeholderText: "Tweak config"
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+                verticalPadding: Style.space(1)
+                onTextChanged: root.aiInstruction = text
+                onAccepted: root.tweakWithAi()
+              }
+
+              Button {
+                text: "Using AI"
+                focusable: true
+                enabled: root.detailRift && !actionProcess.running
+                tooltipText: "Open an agent to change how this Rift launches its apps"
+                onClicked: root.tweakWithAi()
+              }
             }
 
             Button {
