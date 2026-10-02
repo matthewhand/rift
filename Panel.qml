@@ -396,6 +396,18 @@ Panel {
         } else if (root.pendingAction === "new") {
           root.notify("Fresh workspace " + response.data.workspace.id, "Open what belongs here, then click 󰦛 and save it as a Rift.")
           root.close()
+        } else if (root.pendingAction === "ai") {
+          // Close so the agent window is actually visible. Rift holds the screen
+          // otherwise, which is the opposite of what the button is for. On failure
+          // the panel stays up, because errorText below is the only place the
+          // reason appears.
+          if (response.data.action === "failed") {
+            root.errorText = response.data.reason || "Could not open an agent"
+            root.notify("No agent opened", root.errorText)
+          } else {
+            root.notify("Agent opened", "Adjusting " + response.data.slug + " with " + response.data.agent + ".")
+            root.close()
+          }
         } else if (root.pendingAction === "rename") {
           root.renaming = false
           root.detailSlug = response.data.slug
