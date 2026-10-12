@@ -17,7 +17,7 @@ to say.*
 
 - `resume_command()` only produces a recipe for three hardcoded programs —
   `claude`, `codex`, `grok`. Any other command is remembered as "a terminal in
-  `<cwd>`", so `herdr --remote matthewh@10.0.0.30` came back as a bare `foot`.
+  `<cwd>`", so `herdr --remote user@10.0.0.30` came back as a bare `foot`.
 - Detection records the window *class* but not the `--app-id`, so the stored
   recipe launched a **generic** terminal and any window-class rule stopped
   matching.
@@ -75,8 +75,11 @@ project's design, and the reason the feature above exists rather than a patch to
 [![Version](https://img.shields.io/badge/version-0.3.8-8b5cf6?style=for-the-badge)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 
+Install from **this fork**, not from upstream: the features described in
+[Changes in this fork](#changes-in-this-fork) exist only here.
+
 ```bash
-omarchy plugin add https://github.com/nixfred/rift.git --enable
+omarchy plugin add https://github.com/matthewhand/rift.git --enable
 ```
 
 <img src="preview.png" alt="Rift panel in the Omarchy bar — a saved Rift named Hacking, 2 applications, opens at login" width="520">
@@ -152,8 +155,11 @@ The panel is fully keyboard-driven, in the same `KeyboardPanel` style as Omarchy
 
 ## Install
 
+From **this fork** — the upstream URL would install a version without the features
+above.
+
 ```bash
-omarchy plugin add https://github.com/nixfred/rift.git --enable
+omarchy plugin add https://github.com/matthewhand/rift.git --enable
 ```
 
 Pick a bar section when prompted (defaults to **right**). `󰦛` appears in the bar. Click it.
@@ -161,7 +167,7 @@ Pick a bar section when prompted (defaults to **right**). `󰦛` appears in the 
 Manual install:
 
 ```bash
-git clone https://github.com/nixfred/rift.git ~/.config/omarchy/plugins/nixfred.rift
+git clone https://github.com/matthewhand/rift.git ~/.config/omarchy/plugins/nixfred.rift
 omarchy plugin enable nixfred.rift
 ```
 
