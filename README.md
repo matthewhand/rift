@@ -17,7 +17,7 @@ to say.*
 
 - `resume_command()` only produces a recipe for three hardcoded programs —
   `claude`, `codex`, `grok`. Any other command is remembered as "a terminal in
-  `<cwd>`", so `herdr --remote user@10.0.0.30` came back as a bare `foot`.
+  `<cwd>`", so `herdr --remote user@host` came back as a bare `foot`.
 - Detection records the window *class* but not the `--app-id`, so the stored
   recipe launched a **generic** terminal and any window-class rule stopped
   matching.
